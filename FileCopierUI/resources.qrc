@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>resources/css/common.css</file>
+        <file>resources/img/folder-48.png</file>
+    </qresource>
+</RCC>
