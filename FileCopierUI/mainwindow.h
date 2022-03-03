@@ -1,4 +1,4 @@
-#ifndef MAINWINDOW_H
+﻿#ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <QMainWindow>
@@ -7,6 +7,7 @@
 #include <QFileInfoList>
 #include <QTimer>
 #include <QTime>
+#include <QFuture>
 
 
 QT_BEGIN_NAMESPACE
@@ -22,20 +23,23 @@ public:
     ~MainWindow();
 
 signals:
+    void timerCanStart();
+    void appendMessage(const QString&);
 
 private slots:
     void openSourceDir();
     void openTargetDir();
     void runCopy();
     void interruptCopy();
+    void copyProcessHandler();
 
 private:
     Ui::MainWindow *ui;
 
     CopyManager *m_copyManager;
-    QFileInfoList m_list;
 
     QTimer *m_timer;
     QTime m_time;
+    QFuture<void> m_future;
 };
 #endif // MAINWINDOW_H

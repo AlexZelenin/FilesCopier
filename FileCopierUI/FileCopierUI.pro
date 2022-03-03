@@ -29,7 +29,6 @@ else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/../../FCBin/ -lCopyMana
 else:unix: LIBS += -L$$PWD/../../FCBin/ -lCopyManager
 
 LIBS += -lgtest
-LIBS += -lgmock
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

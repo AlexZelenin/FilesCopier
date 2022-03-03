@@ -6,8 +6,9 @@
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QDebug>
-#include <QDirIterator>
 #include <QDateTime>
+#include <QDirIterator>
+#include <QtConcurrent/QtConcurrent>
 
 #include <map>
 
@@ -25,43 +26,15 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->tbSource, &QToolButton::clicked, this, &MainWindow::openSourceDir);
     connect(ui->tbTarget, &QToolButton::clicked, this, &MainWindow::openTargetDir);
     connect(ui->btnStart, &QPushButton::clicked, this, &MainWindow::runCopy);
-    connect(ui->btnInterrupt, &QPushButton::clicked, this, &MainWindow::interruptCopy);
+    connect(ui->btnInterrupt, &QPushButton::clicked, this, &MainWindow::interruptCopy, Qt::QueuedConnection);
+    connect(this, &MainWindow::appendMessage, ui->textBrowser, &QTextBrowser::append);
 
     m_timer = new QTimer(this);
+    m_timer->setInterval(0);
 
-    connect(m_timer, &QTimer::timeout, this, [this](){
-        auto i = m_copyManager->progress();
-        ui->progressBar->setTextVisible(true);
-        ui->progressBar->setValue(i);
+    connect(m_timer, &QTimer::timeout, this, &MainWindow::copyProcessHandler, Qt::QueuedConnection);
 
-        QFile logFile(qApp->applicationDirPath() + "/log.txt");
-        if(logFile.open(QFile::Append | QFile::Text)) {
-            QString currTime = "[" +
-                    QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss.zzz") + "]";
-
-            QTextStream stream(&logFile);
-            while (!m_copyManager->getErrorQueue().empty()) {
-                stream << QString("%1 Error - %2\n").arg(currTime, m_copyManager->getErrorQueue().front().c_str());
-                m_copyManager->getErrorQueue().pop();
-            }
-
-            stream.flush();
-            logFile.flush();
-            logFile.close();
-        }
-
-        if (i == ui->progressBar->maximum() || m_copyManager->isInterrupted()) {
-            int msecs = m_time.elapsed();
-            QTime time(0,0,0);
-            ui->textBrowser->append(QString("Затрачено времени: %1").arg(time.addMSecs(msecs).toString("mm:ss:zzz")));
-
-            m_timer->stop();
-            if (m_copyManager) {
-                delete m_copyManager;
-                m_copyManager = nullptr;
-            }
-        }
-    });
+    connect(this, SIGNAL(timerCanStart()), m_timer, SLOT(start()), Qt::QueuedConnection);
 
     connect(ui->btnQuit, &QPushButton::clicked, this, [](){
         qApp->quit();
@@ -80,15 +53,6 @@ void MainWindow::openSourceDir()
 
     if (path.isEmpty()) return;
 
-    QDirIterator it(path, QDirIterator::Subdirectories);
-
-    m_list.clear();
-
-    while(it.hasNext()) {
-        m_list.append(it.fileInfo());
-        it.next();
-    }
-
     ui->leSource->setText(path);
 }
 
@@ -100,49 +64,61 @@ void MainWindow::openTargetDir()
 }
 
 void MainWindow::runCopy()
-{
-    std::list<CMGlobal::FileInfo> list_files;
+{   
+    m_future = QtConcurrent::run([this]() {
+        emit appendMessage("Идет подготовка к копированию...");
+        QDirIterator iter(ui->leSource->text(), QDirIterator::Subdirectories);
 
-    const QString& pathTo = ui->leTarget->text();
-    const QString& pathFrom = ui->leSource->text();
+        std::list<CMGlobal::FileInfo> list_files;
 
-    QDir dir(ui->leSource->text());
+        const QString& pathTo = ui->leTarget->text();
+        const QString& pathFrom = ui->leSource->text();
 
-    int i = 0;
+        QDir dir(ui->leSource->text());
 
-    foreach(const QFileInfo& finfo, m_list) {
+        int i = 0;
 
-        if (finfo.isDir()) {
-            QString newPath = QString("%1/%2").arg(pathTo, dir.relativeFilePath(finfo.filePath()));
-            QDir().mkdir(newPath);
-        }
+        while(iter.hasNext()) {
+            QFileInfo finfo = iter.fileInfo();
 
-        CMGlobal::FileInfo file_info;
+            if (finfo.isDir()) {
+                QString newPath = QString("%1/%2").arg(pathTo, dir.relativeFilePath(finfo.filePath()));
+                QDir().mkdir(newPath);
+            }
 
-        file_info.filename = dir.relativeFilePath(finfo.filePath()).toStdString();
-        file_info.file_size = finfo.size();
-        file_info.pathFrom = pathFrom.toStdString();
-        file_info.pathTo = pathTo.toStdString();
-        file_info.type = !finfo.isDir() ? CMGlobal::FileInfo::File : CMGlobal::FileInfo::Directory;
+            CMGlobal::FileInfo file_info;
 
-        if (file_info.filename.empty()) continue;
+            file_info.filename = dir.relativeFilePath(finfo.filePath()).toStdString();
+            file_info.file_size = finfo.size();
+            file_info.pathFrom = pathFrom.toStdString();
+            file_info.pathTo = pathTo.toStdString();
+            file_info.type = !finfo.isDir() ? CMGlobal::FileInfo::File : CMGlobal::FileInfo::Directory;
 
-        if (file_info.type & CMGlobal::FileInfo::File) {
+            if (file_info.filename.empty()) {
+                iter.next();
+                continue;
+            }
+
+            if (file_info.type & CMGlobal::FileInfo::File) {
                 i++;
+            }
+
+            list_files.push_back(file_info);
+
+            iter.next();
         }
 
-        list_files.push_back(file_info);
-    }
+        emit appendMessage(QString("Файлов для копирования: %1").arg(i));
 
-    ui->textBrowser->append(QString("Файлов для копирования: %1").arg(i));
+        ui->progressBar->setMaximum(i);
 
-    ui->progressBar->setMaximum(i);
+        m_copyManager = new CopyManager(list_files);
 
-    m_copyManager = new CopyManager(list_files);
+        m_copyManager->runCopy();
 
-    m_copyManager->runCopy();
-    m_timer->start(0);
-    m_time.start();
+        m_time.start();
+        emit timerCanStart();
+    });
 }
 
 void MainWindow::interruptCopy()
@@ -150,5 +126,43 @@ void MainWindow::interruptCopy()
     if (m_copyManager) {
         if (!m_copyManager->isInterrupted())
             m_copyManager->interrupt();
+    }
+}
+
+void MainWindow::copyProcessHandler()
+{
+    auto i = m_copyManager->progress();
+    ui->progressBar->setTextVisible(true);
+    ui->progressBar->setValue(i);
+
+    QFile logFile(qApp->applicationDirPath() + "/log.txt");
+    if(logFile.open(QFile::Append | QFile::Text)) {
+        QString currTime = "[" +
+                QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss.zzz") + "]";
+
+        QTextStream stream(&logFile);
+        while (!m_copyManager->getErrorQueue().empty()) {
+            stream << QString("%1 Error - %2\n").arg(currTime, m_copyManager->getErrorQueue().front().c_str());
+            m_copyManager->getErrorQueue().pop();
+        }
+
+        stream.flush();
+        logFile.flush();
+        logFile.close();
+    }
+
+    if (i == ui->progressBar->maximum() || m_copyManager->isInterrupted()) {
+        int msecs = m_time.elapsed();
+        QTime time(0,0,0);
+        emit appendMessage(QString("Затрачено времени: %1").arg(time.addMSecs(msecs).toString("mm:ss:zzz")));
+
+        m_copyManager->wait();
+        m_future.waitForFinished();
+
+        if (m_copyManager) {
+            delete m_copyManager;
+            m_copyManager = nullptr;
+        }
+        m_timer->stop();
     }
 }

@@ -5,7 +5,7 @@ CONFIG -= qt
 TEMPLATE = lib
 DEFINES += COPYMANAGER_LIBRARY
 
-CONFIG += c++11
+CONFIG += c++17
 
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
@@ -19,7 +19,6 @@ HEADERS += \
     copymanager.h
 
 LIBS += -lgtest
-LIBS += -lgmock
 
 # Default rules for deployment.
 unix {

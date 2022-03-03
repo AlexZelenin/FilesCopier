@@ -5,8 +5,7 @@ CONFIG += ordered
 
 SUBDIRS +=  \
     CopyManager \
-    FileCopierUI \
-    Tests/TestReadSourceDir
+    FileCopierUI
 
 
 FileCopierUI.depends = CopyManager

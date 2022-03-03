@@ -32,6 +32,8 @@ public:
     bool isComplete() const noexcept;
     std::queue<std::string>& getErrorQueue();
 
+    void wait();
+
 private:
     void readDir();
     void writeDir();

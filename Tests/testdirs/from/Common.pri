@@ -1,0 +1,7 @@
+ROOT_DIR = $$PWD
+
+
+DESTDIR = $$ROOT_DIR/../FCBin
+
+INCLUDEPATH += $$ROOT_DIR/CopyManager
+DEPENDPATH += $$ROOT_DIR/CopyManager

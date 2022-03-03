@@ -23,8 +23,6 @@ CopyManager::CopyManager(const std::list<CMGlobal::FileInfo>& file_list)
 
 CopyManager::~CopyManager()
 {
-    m_th1.join();
-    m_th2.join();
 }
 
 void CopyManager::runCopy()
@@ -51,6 +49,12 @@ int CopyManager::progress() const noexcept
 std::queue<std::string>& CopyManager::getErrorQueue()
 {
     return m_error_queue;
+}
+
+void CopyManager::wait()
+{
+    m_th1.join();
+    m_th2.join();
 }
 
 void CopyManager::readDir()
@@ -93,7 +97,6 @@ void CopyManager::readDir()
 void CopyManager::writeDir()
 {
     while(!isInterrupted()) {
-
         std::unique_lock<std::mutex> lock(m_mutex);
         m_cv.wait(lock, [this](){
             while(!m_canRead) { return false; }
