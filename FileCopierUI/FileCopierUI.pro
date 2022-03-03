@@ -28,8 +28,6 @@ win32:CONFIG(release, debug|release): LIBS += -L$$PWD/../../FCBin/ -lCopyManager
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/../../FCBin/ -lCopyManager
 else:unix: LIBS += -L$$PWD/../../FCBin/ -lCopyManager
 
-LIBS += -lgtest
-
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin

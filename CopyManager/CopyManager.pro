@@ -18,8 +18,6 @@ HEADERS += \
     CopyManager_global.h \
     copymanager.h
 
-LIBS += -lgtest
-
 # Default rules for deployment.
 unix {
     target.path = /usr/lib
